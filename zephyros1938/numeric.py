@@ -210,9 +210,24 @@ class CSharpFloat(float):
         result = float(self) / float(other)
         return self.__class__(result)
 
+    def Abs(x: float):
+        if x < 0:
+            return -x
+        return x
+
+    Pi = 3.1415926535897931
+    Tau = 6.2831853071795862
+    E = 2.7182818284590451
+    Epsilon = 4.94065645841247e-324
+
 
 class Single(CSharpFloat):
     _precision = "32"
+
+    Pi = 3.14159274
+    Tau = 6.28318548
+    E = 2.71828175
+    Epsilon = 1.401298e-45
 
 
 class Double(CSharpFloat):
@@ -229,6 +244,13 @@ class Decimal(decimal.Decimal):
 
     def __new__(cls, value="0", *args, **kwargs):
         return super().__new__(cls, value, *args, **kwargs)
+
+
+def IsNumeric(V):
+    return (
+        isinstance(V, CSharpInt) or isinstance(V, CSharpFloat),
+        isinstance(V, int) or isinstance(V, float),
+    )
 
 
 # --- Reference Types ---
@@ -345,7 +367,7 @@ class Guid(uuid.UUID):
     def __new__(cls, hex=None, *args, **kwargs):
         if hex is None:
             return uuid.uuid4()
-        return super().__new__(cls, hex, *args, **kwargs)
+        return super().__new__(cls, *args, **kwargs)
 
 
 # --- Collection Types ---
@@ -362,6 +384,157 @@ class Map(dict):
     def __new__(cls, *args, **kwargs):
         return super().__new__(cls, *args, **kwargs)
 
+
+class Vector2(metaclass=AutoCastMeta):
+    def __init__(self, X=None, Y=None):
+        if X != None and Y != None:
+            if not (IsNumeric(X) and IsNumeric(Y)):
+                raise ValueError(
+                    "X and Y value of Vector2 must be of CSharpFloat type."
+                )
+            self.X = X or CSharpFloat(0)
+            self.Y = Y or CSharpFloat(0)
+        elif X != None and Y == None:
+            if not (IsNumeric(X)):
+                raise ValueError("X value of Vector2 must be of CSharpFloat type.")
+            self.X = X or CSharpFloat(0)
+            self.Y = X or CSharpFloat(0)
+        elif X == None and Y != None:
+            if not (IsNumeric(Y)):
+                raise ValueError("Y value of Vector2 must be of CSharpFloat type.")
+            self.X = Y or CSharpFloat(0)
+            self.Y = Y or CSharpFloat(0)
+        else:
+            self.X = CSharpFloat(0)
+            self.Y = CSharpFloat(0)
+
+    def __add__(self, other):
+        if isinstance(other, __class__):
+            return self.__class__(self.X + other.X, self.Y + other.Y)
+        if isinstance(other, float):
+            return self.__class__(self.X + Single(other), self.Y + Single(other))
+        if isinstance(other, int):
+            return self.__class__(self.X + Single(other), self.Y + Single(other))
+        if isinstance(other, tuple):
+            return self.__class__(self.X + Single(other[0]), self.Y + Single(other[1]))
+        raise ArithmeticError(f"Could not add {self} by {other}")
+
+    def __sub__(self, other):
+        if isinstance(other, __class__):
+            return self.__class__(self.X - other.X, self.Y - other.Y)
+        if isinstance(other, float):
+            return self.__class__(self.X - Single(other), self.Y - Single(other))
+        if isinstance(other, int):
+            return self.__class__(self.X - Single(other), self.Y - Single(other))
+        if isinstance(other, tuple):
+            return self.__class__(self.X - Single(other[0]), self.Y - Single(other[1]))
+        raise ArithmeticError(f"Could not subtract {self} by {other}")
+
+    def __mul__(self, other):
+        if isinstance(other, __class__):
+            return self.__class__(self.X * other.X, self.Y * other.Y)
+        if isinstance(other, float):
+            return self.__class__(self.X * Single(other), self.Y * Single(other))
+        if isinstance(other, int):
+            return self.__class__(self.X * Single(other), self.Y * Single(other))
+        if isinstance(other, tuple):
+            return self.__class__(self.X * Single(other[0]), self.Y * Single(other[1]))
+        raise ArithmeticError(f"Could not multiply {self} by {other}")
+
+    def __truediv__(self, other):
+        if isinstance(other, __class__):
+            return self.__class__(self.X / other.X, self.Y / other.Y)
+        if isinstance(other, float):
+            return self.__class__(self.X / Single(other), self.Y / Single(other))
+        if isinstance(other, int):
+            return self.__class__(self.X / Single(other), self.Y / Single(other))
+        if isinstance(other, tuple):
+            return self.__class__(self.X / Single(other[0]), self.Y / Single(other[1]))
+        raise ArithmeticError(f"Could not divide {self} by {other}")
+
+    def __str__(self):
+        return f"({Single(self.X)}, {Single(self.Y)})"
+
+    def __getitem__(self, index: int) -> Single:
+        if index == 0:
+            return Single(self.X)
+        if index == 1:
+            return Single(self.Y)
+        raise IndexError(f"Index must be within 0 or 1, got {index}")
+
+    def __setitem__(self, key: int, value):
+        if key == 0:
+            self.X = Single(value)
+            return
+        if key == 1:
+            self.Y = Single(value)
+            return
+        raise IndexError(f"Index must be within 0 or 1, got {key}")
+
+    @staticmethod
+    def Abs(v):
+        if isinstance(v, Vector2):
+            return Vector2(Single.Abs(v.X), Single.Abs(v.Y))
+        if isinstance(v, tuple):
+            if len(v) != 2:
+                raise ValueError(
+                    f"Tuple length for Vector2.Abs must be 2, got {len(v)}"
+                )
+            return Vector2(Single.Abs(tuple[0]), Single.Abs(tuple[1]))
+        if isinstance(v, float):
+            vabs: Single = Single.Abs(v)
+            return Vector2(vabs, vabs)
+        raise ArithmeticError(f"Could not get absolute value of {v}")
+
+    @staticmethod
+    def Add(left, right):
+        [l, r] = [__class__.ToVector2(left), __class__.ToVector2(right)]
+        return l + r
+
+    @staticmethod
+    def Dot(left, right) -> Single:
+        [l, r] = [__class__.ToVector2(left), __class__.ToVector2(right)]
+        return (l.X * r.X) + (l.Y * r.Y)
+
+    @staticmethod
+    def ToVector2(v):
+        if isinstance(v, Vector2):
+            return Vector2(v.X, v.Y)
+        if isinstance(v, tuple):
+            return Vector2(v[0], v[1])
+        if isinstance(v, float):
+            return Vector2(v, v)
+        raise ValueError(
+            f"Could not convert {v} with type {type(v).__name__} to Vector2"
+        )
+
+    @property
+    def XY(self):
+        return self.__class__(Single(self.X), Single(self.Y))
+
+    @property
+    def XX(self):
+        return self.__class__(Single(self.X), Single(self.X))
+
+    @property
+    def YY(self):
+        return self.__class__(Single(self.Y), Single(self.Y))
+
+    @property
+    def YX(self):
+        return self.__class__(Single(self.Y), Single(self.X))
+
+    Pi = (Single.Pi, Single.Pi)
+    Tau = (Single.Tau, Single.Tau)
+    E = (Single.E, Single.E)
+    Epsilon = (Single.Epsilon, Single.Epsilon)
+    UnitX = (Single(1), Single(0))
+    UnitY = (Single(0), Single(1))
+    Zero = (Single(0), Single(0))
+    One = (Single(1), Single(1))
+
+
+NaN = None
 
 # --- Example Usage ---
 
@@ -389,3 +562,13 @@ if __name__ == "__main__":
     guid2 = Guid("12345678123456781234567812345678")
     print("Generated Guid:", guid1)
     print("Specified Guid:", guid2)
+
+    # Vector2 arithmetic
+    v2 = Vector2(16)
+    for i in [Vector2(2, 2), (2, 2), Single(2), Vector2(2, 3), (2, 3)]:
+        print(f"Vector2 : {type(i).__name__.ljust(15)} : {str(i).ljust(15)}")
+        print(f"\t{v2} + {i}: {Vector2.Add(v2, i)}")
+        print(f"\t{v2} - {i}: {v2 - i}")
+        print(f"\t{v2} * {i}: {v2 * i}")
+        print(f"\t{v2} / {i}: {v2 / i}")
+    print(f"{Vector2.Abs(Vector2(-1.0,-1.0))}")

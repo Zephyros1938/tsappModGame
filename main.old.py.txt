@@ -1,0 +1,78 @@
+import zephyros1938.tsapp as tsapp
+import zephyros1938.tsappMod as tsappMod
+import threading as th
+from zephyros1938.overrides import *
+
+
+class GameConfig(metaclass=AutoCastMeta):
+    def __init__(
+        self, width: Int16, height: Int16, title: String, color: tuple[Byte, Byte, Byte]
+    ):
+        self.width = width
+        self.height = height
+        self.title = title
+        self.color = color
+
+
+class Game(metaclass=AutoCastMeta):
+    display: tsappMod.Surface
+    logicThread: th.Thread
+    displayThread: th.Thread
+    threads = []
+
+    def __init__(
+        self,
+        windowargs=GameConfig(Int16(1080), Int16(720), "TEST", (0x0, 0xFF, 0x0)),
+    ):
+        self.windowargs = windowargs
+        self.width = windowargs.width
+        self.height = windowargs.height
+        self.title = windowargs.title
+        self.color = windowargs.color
+        self.display = tsappMod.Surface(
+            width=self.width,
+            height=self.height,
+            title=self.title,
+            background_color=self.color,
+        )
+        print(self.display._surface.get_flags())
+
+    def gameLogicLoop(self):
+        while self.display.is_running:
+            #print(self.display.deltatime)
+            pass
+
+    def gameDisplayLoop(self):
+        t = tsappMod.TextLabel(
+            font_name="Arial.ttf",
+            font_size=12,
+            x=100,
+            y=100,
+            width=self.display.width,
+            text="test",
+            color=(255, 255, 255),
+        )
+        t.x_speed = 10
+        self.display.add_object(t)
+        while self.display.is_running:
+            print(t.position)
+            self.display.finish_frame()
+
+    def run(self):
+        self.display.framerate = -1
+        self.logicThread = th.Thread(target=self.gameLogicLoop)
+        self.logicThread.start()
+        self.gameDisplayLoop()
+        self.logicThread.join()
+
+
+class Main(metaclass=AutoCastMeta):
+    game: Game
+
+    def __init__(self, *args, **kwargs):
+        self.game = Game()
+        self.game.run()
+
+
+if __name__ == "__main__":
+    Main()
