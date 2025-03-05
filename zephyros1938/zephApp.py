@@ -1,10 +1,18 @@
+import queue
+from time import sleep
 from typing import List
+import threading
 import pygame
-from zephyros1938.numeric import *
+from zephyros1938.csharp import *
 
 pygame.init()
 
 _ACTIVE_WINDOW = None
+_GLOBAL_EVENT_LIST = []
+_BARRIER = threading.Barrier(4)
+_EVENT_THREAD_FINISH = threading.Event()
+_DRAW_MANAGER_THREAD_FINISH = threading.Event()
+_RENDER_THREAD_FINISH = threading.Event()
 
 
 class WindowArgs(metaclass=AutoCastMeta):
@@ -16,7 +24,7 @@ class WindowArgs(metaclass=AutoCastMeta):
         background_color=(Byte(255), Byte(255), Byte(255)),
         pygame_gl_args=pygame.OPENGL | pygame.DOUBLEBUF,
         framerate=SByte(-1),
-        vsync=Byte(1),
+        vsync=Boolean(1),
     ):
         if vsync != 0 and vsync != 1:
             raise ValueError(f"vsync window argument must be 0/1, got {vsync}")
@@ -40,6 +48,8 @@ class Window(Object, metaclass=AutoCastMeta):
 
         self._clock = pygame.time.Clock()
         self._draw_list = []
+        self._pending_draw_list = []
+        self.running = Boolean(0)
 
         global _ACTIVE_WINDOW
         _ACTIVE_WINDOW = self
@@ -72,6 +82,82 @@ class Window(Object, metaclass=AutoCastMeta):
     @property
     def delta(self) -> Single:
         return self._clock.get_time() / 1000.0
+
+    def _RENDER_THREAD(self):
+        while self.running:
+            self._clock.tick(self.windowargs.framerate)
+            self._surface.fill(self.windowargs.background_color)
+            for item in self._draw_list:
+                item._draw()
+            pygame.display.flip()
+            print("RENDR TICK", self.delta)
+            try:
+                _BARRIER.wait()
+            except threading.BrokenBarrierError:
+                break
+        _BARRIER.wait()
+
+    def _LOGIC_THREAD(self):
+        while self.running:
+            for item in self._draw_list:
+                if item.destroyed:
+                    item.destroy()
+                else:
+                    item._update()
+            print("LOGIC TICK", self.delta)
+            try:
+                _BARRIER.wait()
+            except threading.BrokenBarrierError:
+                break
+        _BARRIER.wait()
+
+    def _EVENT_THREAD(self):
+        while self.running:
+            global _GLOBAL_EVENT_LIST
+            _GLOBAL_EVENT_LIST = pygame.event.get()
+            if any(event.type == pygame.QUIT for event in _GLOBAL_EVENT_LIST):
+                self.Cleanup()
+            print("EVENT TICK", self.delta)
+            try:
+                _BARRIER.wait()
+            except threading.BrokenBarrierError:
+                break
+        _BARRIER.wait()
+
+    def _DRAW_ADDITION_THREAD(self):
+        while self.running:
+            for item in self._pending_draw_list:
+                self._draw_list.append(item)
+                self._pending_draw_list.remove(item)
+            print("DRAWR TICK", self.delta)
+            try:
+                _BARRIER.wait()
+            except threading.BrokenBarrierError:
+                break
+        _BARRIER.wait()
+
+    def Run(self):
+        self.running = Boolean(1)
+        self.threadpool = [
+            threading.Thread(target=ev)
+            for ev in [
+                self._LOGIC_THREAD,
+                self._DRAW_ADDITION_THREAD,
+                self._EVENT_THREAD,
+            ]
+        ]
+        [t.start() for t in self.threadpool]
+        self._RENDER_THREAD()
+        self.Cleanup()
+
+    def Cleanup(self):
+        print("Cleaning Up...")
+        self.running = Boolean(0)
+        for t in self.threadpool:
+            print(t.name)
+            print(f"{t.is_alive()}")
+            t.join()
+            print(f"{t.is_alive()}")
 
 
 class GraphicalObject(Object, metaclass=AutoCastMeta):
